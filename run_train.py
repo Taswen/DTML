@@ -12,8 +12,10 @@ m.loadData(HSISingleData('./data/', CASSI, HSI2Grey)) # 拍平了
 # m.loadData(HSISingleData('./data/',CASSI))
 m.buildNet()
 m.loadModel('./save/checkpoint/')
+#TODO 计时
 for epoch in range(m.epoch, m.maxEpoch):
-    m.oneEpochTrain()
+    loss = m.oneEpochTrain()
+    print(f"Epoch {epoch}: loss:{loss} lr:{m.optimizer.state_dict()['param_groups'][0]['lr']}")
     m.save()
 
 

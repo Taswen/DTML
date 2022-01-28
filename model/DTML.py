@@ -168,7 +168,7 @@ class DTMLNET:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 # 测试
                 outputs = self.model(inputs)
-                targets = targets.reshape(targets.size(0), -1)
+                targets = targets.reshape(targets.size(0), 1, 1, -1).squeeze()
                 # 张量相减
                 loss = torch.sum(torch.abs(outputs - targets))
                 accumuLoss += loss

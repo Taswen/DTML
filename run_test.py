@@ -16,5 +16,6 @@ print("DataSet Shape:",m.dataSetInfo["shape"])
 
 m.buildNet("test")
 m.loadModel('./save/checkpoint/')
+#TODO 计时
 print("-------------------------\n"+
       "End with loss: ",m.test())

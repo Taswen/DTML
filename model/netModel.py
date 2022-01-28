@@ -13,15 +13,15 @@ class NetModel(torch.nn.Module):
         self.fc3 = torch.nn.Linear(n*n, n*n)
 
         # Convolution layers
-        self.C1 = torch.nn.Conv2d(1,64,kernel_size=5)
-        self.C2 = torch.nn.Conv2d(64,64,kernel_size=5)
-        self.DeC = torch.nn.Conv2d(64,1,kernel_size=7)
+        self.C1 = torch.nn.Conv2d(1,64,kernel_size=5,padding=2)
+        self.C2 = torch.nn.Conv2d(64,64,kernel_size=5,padding=2)
+        self.DeC = torch.nn.Conv2d(64,31,kernel_size=7,padding=3)
 
     def forward(self, x):
 
         batchSize,h,w = x.size(0),x.size(1),x.size(2)
         # 除了batch维,其他连成一维向量，
-        x = x.reshape(batchSize, -1)
+        x = x.reshape(batchSize,1,1,-1).squeeze()
 
         # 全连接
         x = F.tanh(self.fc1(x))
@@ -29,7 +29,7 @@ class NetModel(torch.nn.Module):
         x = F.tanh(self.fc3(x))
         
         # 重新整型为二维的
-        x = x.reshape(batchSize,h,w,-1)
+        x = x.reshape(batchSize,-1,h,w)
 
         # 卷积操作
         x = F.relu(self.C1(x))
