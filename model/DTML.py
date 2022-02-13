@@ -1,12 +1,14 @@
 import os
 import re
+from signal import raise_signal
 from sqlite3 import DataError
+from xmlrpc.client import boolean
 import torch
 import configparser
 from torch.utils.data import DataLoader 
 import torch.nn.functional as F
 import torch.optim as optim
-import netModel.NetModel as NetModel 
+from model.netModel import NetModel
 
 class DTMLNET:
 
@@ -22,20 +24,20 @@ class DTMLNET:
         self.modelParams = None
 
         # 初始化配置
-        self.batchSize = self._getParam("model","batchSize",0.00002)
-        self.epochNum = self._getParam("model", "epoch", 100)
+        self.batchSize = int(self._getParam("model","batchSize",100))
+        self.epochNum = int(self._getParam("model", "epoch", 100))
         self.beforeEpoch = -1
         self.epoch = 0
         self.maxEpoch = self.epochNum - 1
 
         # 读取其他参数
-        self.saveStep = self._getParam("env","saveStep",1)
-        self.saveNew = self._getParam("env","saveNew",True)
+        self.saveStep = int(self._getParam("env","saveStep",1))
+        self.saveNew =bool(self._getParam("env","saveNew",True))
 
         # 定义设备
         self.device = torch.device(
-            f"cuda:{self._getParam('env','GPU','0')}" 
-            if torch.cuda.is_available() and self._getParam('env', 'useGPU',False) == 'True' else 'cpu'
+            f"cuda:{self._getParam('env','GPU',0)}" 
+            if torch.cuda.is_available() and bool(self._getParam('env', 'useGPU',False)) else 'cpu'
         )
 
         # 初始化网络
@@ -48,10 +50,10 @@ class DTMLNET:
         self.mode = mode
 
         if self.dataSetInfo is None:
-            raise DataError("Need define data before build a net")
+            raise DataError("Need to define data before build a net")
 
         # 使用的模型
-        self.model = NetModel(self.dataSetInfo["shape"][1],self.dataSetInfo["shape"][-1])
+        self.model = NetModel(self.dataSetInfo["XShape"][1],self.dataSetInfo["XShape"][-1])
         self.model.to(self.device)
 
 
@@ -59,7 +61,7 @@ class DTMLNET:
             # 定义损失函数
             self.lossFuction = self._getParam("model","lossFuction",'MSE')
             self.regularization = self._getParam("model","regularization","L2")        # 正则化的方式
-            self.regLambda = self._getParam("model","regLambda",0.001) if self.regularization == "L1" else 0
+            self.regLambda = float(self._getParam("model","regLambda",0.001)) if self.regularization == "L1" else 0.0
             if "MSE" == self.lossFuction:
                 self.calLoss = torch.nn.MSELoss()
             elif "CE" == self.lossFuction:
@@ -68,9 +70,9 @@ class DTMLNET:
                 self.calLoss = torch.nn.NLLLoss()
             
             # 定义优化器
-            self.learningRate = self._getParam("model","learningRate",0.00002)
-            self.momentum = self._getParam("model","momentum",0.0)
-            self.decay = self._getParam("model","decay",0.9)
+            self.learningRate =float(self._getParam("model","learningRate",0.00002))
+            self.momentum = float(self._getParam("model","momentum",0.0))
+            self.decay = float(self._getParam("model","decay",0.9))
             self.optimizerInSet = self._getParam("model","optimizer","RMSprop")
             if "RMSprop" == self.optimizerInSet:
                 self.optimizer = optim.RMSprop(self.model.parameters(),lr=self.learningRate, momentum=self.momentum,weight_decay=self.decay)
@@ -81,8 +83,16 @@ class DTMLNET:
     def loadData(self, dataSet, shuffle=True):
         self.dataSetInfo ={
             "size":  len(dataSet),
-            "shape": dataSet[0].shape
         }
+        if self.dataSetInfo["size"] == 0:
+            raise DataError("Data must be not empty.")
+        self.dataSetInfo["tupleNum"] = len(dataSet[0])
+        if self.dataSetInfo["tupleNum"] == 1:
+            self.dataSetInfo["XShape"] = dataSet[0].shape
+        elif self.dataSetInfo["tupleNum"] == 2:
+            self.dataSetInfo["XShape"] = dataSet[0][0].shape
+            self.dataSetInfo["YShape"] = dataSet[0][1].shape
+
         if self.batchSize is None or self.batchSize == -1:
             self.batchSize = self.dataSetInfo["size"]
         self.dataLoader = DataLoader(dataset=dataSet,batch_size=self.batchSize,shuffle=shuffle)
@@ -90,10 +100,11 @@ class DTMLNET:
     def loadModel(self, modelFile):
         self.modelFile = modelFile
         # 是否加载模型
-        self.isLoadModel = (self._getParam("env", "continue", False) or self.mode == "test") and os.path.isfile(self.modelFile) 
+        self.isLoadModel = (bool(self._getParam("env", "continue", False)) or self.mode == "test") and os.path.isfile(self.modelFile) 
         if self.isLoadModel:
             self.modelParams = torch.load(self.modelFile)
             self.beforeEpoch = self.modelParams['epoch']
+            print(self.beforeEpoch)
             self.model.load_state_dict(self.modelParams['model_state'])
             self.model.to(self.device)
         else:
@@ -101,7 +112,7 @@ class DTMLNET:
                 raise AttributeError("Model file doesn't exist in test mode.")
 
         if self.mode == "train":
-            if self._getParam("env", "epochContinue", False):
+            if bool(self._getParam("env", "epochContinue", False)):
                 self.epoch = self.beforeEpoch + 1
                 self.maxEpoch = self.beforeEpoch + self.epochNum
 
@@ -118,11 +129,11 @@ class DTMLNET:
         if self.configs.has_option(section, options):
             return self.configs.get(section, options)
         else:
-            self.configs.set(section, options, str(default))
+            self.configs.set(section, options, default)
             return default
     
 
-    def oneEpochTrain(self, dataloader=None, epochInc=True):
+    def oneEpochTrain(self, epoch=None, dataloader=None):
         self.model.train()
 
         if dataloader is None:
@@ -131,12 +142,13 @@ class DTMLNET:
         accumuLoss = 0.0
 
         for batchI,(inputs, targets) in enumerate(dataLoader):
+            targets = targets.reshape(targets.size(0), -1)
             # 数据迁移
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             # 优化器清零
             self.optimizer.zero_grad()
             # 训练
-            outputs = self.model(inputs)
+            outputs = self.model(inputs.float())
 
             # 针对L1正则化的罚项计算.
             penalty = 0
@@ -152,9 +164,9 @@ class DTMLNET:
             # 超参数更新
             self.optimizer.step()
 
-        if epochInc:
+        if epoch is None:
             self.epoch += 1
-        
+
         return accumuLoss
 
     def test(self):
@@ -164,11 +176,11 @@ class DTMLNET:
         outputs = None
         with torch.no_grad():
             for i, (inputs, targets) in enumerate(self.dataLoader):
+                targets = targets.reshape(targets.size(0), -1)
                 # 数据迁移
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 # 测试
                 outputs = self.model(inputs)
-                targets = targets.reshape(targets.size(0), 1, 1, -1).squeeze()
                 # 张量相减
                 loss = torch.sum(torch.abs(outputs - targets))
                 accumuLoss += loss
@@ -179,15 +191,15 @@ class DTMLNET:
         return accumuLoss, outputs
 
     def save(self, path="", file_fmt ="checkpoint_%s.ckpt",fmt_params=None):
-        if self.saveStep != 0:
+        if self.saveStep == 0:
             return
-        elif self.epoch % (self.saveStep + 1) ==1 or self.epoch==self.maxEpoch:
+        elif self.epoch % self.saveStep == 0 or self.epoch==self.maxEpoch:
             if path == "":
                 path = "./"
-            os.makedirs(path,exist_ok=True)
+            os.makedirs(path, exist_ok=True)
             
             if not self.saveNew:
-                filelist=os.listdir(path)
+                filelist = os.listdir(path)
                 for f in filelist:
                     if re.fullmatch(file_fmt.replace('.',r'\.').replace('%s','(.+?)'),f) :
                         os.remove(os.path.join(path, f))
