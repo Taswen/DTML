@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 import h5py
+import scipy.io as sio
 import numpy as np
 
 
@@ -55,20 +56,38 @@ def X0FromLS(input, mask):
     return np.multiply(mutil_y, mask)                   # 再次使用掩膜进行编码（把 y2 和掩膜对应位置相乘）
 
 class HSISingleData(Dataset):
-    def __init__(self, file, transformX=lambda x:x, transformY=lambda x:x):
-        data   = h5py.File(file,'r') 
-        labels = data['label']                        # 获取其中数据标签
-        del data
+    def __init__(self, file, transOrder=None, transformX=lambda x:x, transformY=lambda x:x, labelName="label", ylabelName=None):
+        try:
+            data = h5py.File(file,'r') 
+        except OSError as e:
+            print("Can't open file by h5py. Try to use sio")
+            data = sio.loadmat(file)
         
-        self.labels = np.transpose(labels, (0, 3, 2, 1))   # 调整维度的顺序（batch_size，h,w,c）
+        labels = data[labelName]                       # 获取其中数据标签
+        if ylabelName is None:
+            self.GTData = None
+        else:
+            self.GTData = data[ylabelName]
+        
+        del data
+
+        if len(labels.shape) == 3:
+            labels = np.expand_dims(labels, 0)          # 如果是三维数据（没有 batch）则升维到四维
+        if transOrder is not None:
+            self.labels = np.transpose(labels, transOrder) # 调整维度的顺序到（batch_size，h,w,c）
+        else:
+            self.labels = np.array(labels)
+
         self.transformX = transformX
         self.transformY = transformY
         self.len = labels.shape[0]
 
     def __getitem__(self ,index):
         # input, target
-        return self.transformX(self.labels[index]), self.transformY(self.labels[index])
-        
+        if self.GTData is None:
+            return self.transformX(self.labels[index]), self.transformY(self.labels[index])
+        else:
+            return self.transformX(self.labels[index]), self.transformY(self.GTData)
     
     def __len__(self):
         return self.len

@@ -8,12 +8,14 @@ sys.path.insert(0, join(abspath(dirname(__file__)), ''))
 from model.DTML import DTMLNET
 
 DATASETNAME="Harvard"
+BATCHSIZE=24
 
 m = DTMLNET('./config/train_config.ini')
-# m.loadData(HSISingleData(f'./data/Train/Training_Data_{DATASETNAME}_48.mat', CASSI[0]))
-# m.loadData(HSISingleData(f'./data/Train/Training_Data_{DATASETNAME}_48.mat', lambda x:repeatDim(CASSI(x)[0], 2)))
-# m.loadData(HSISingleData(f'./data/Train/Training_Data_{DATASETNAME}_48.mat', lambda x:normalizeByMax(CASSI(x)[0])))
-m.loadData(HSISingleData(f'./data/Train/Training_Data_{DATASETNAME}_48.mat', lambda x:normalizeByMax(X0FromLS(*CASSI(x)))))
+dataFile = f'./data/Train/Training_Data_{DATASETNAME}_{BATCHSIZE}.mat'
+# m.loadData(HSISingleData(dataFile, (0, 3, 2, 1), CASSI[0]))
+# m.loadData(HSISingleData(dataFile, (0, 3, 2, 1), lambda x:repeatDim(CASSI(x)[0], 2)))
+# m.loadData(HSISingleData(dataFile, (0, 3, 2, 1), lambda x:normalizeByMax(CASSI(x)[0])))
+m.loadData(HSISingleData(dataFile, (0, 3, 2, 1), lambda x:normalizeByMax(X0FromLS(*CASSI(x)))))
 
 print("-------------------------------------")
 print("Data Set:", DATASETNAME)

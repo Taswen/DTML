@@ -157,7 +157,7 @@ class DTMLNET:
                     penalty += torch.sum(torch.abs(p))
 
             # 计算loss
-            loss = self.calLoss(outputs, targets) + self.regLambda*penalty
+            loss = self.calLoss(outputs, targets.float()) + self.regLambda*penalty
             accumuLoss += loss
             # 反向传播
             loss.backward()

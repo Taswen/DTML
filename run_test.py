@@ -8,14 +8,17 @@ sys.path.insert(0, join(abspath(dirname(__file__)), ''))
 from model.DTML import DTMLNET
 
 DATASETNAME="Harvard"
+BATCHSIZE=48
 EPOCH="99"
 
+datafile = f'./data/Test/{DATASETNAME}{BATCHSIZE}/44.mat'
+
 m = DTMLNET('./config/test_config.ini')
-m.loadData(HSISingleData(f'./data/Test/{DATASETNAME}48/44.mat', CASSI))
-# m.loadData(HSISingleData(f'./data/Test/{DATASETNAME}48/44.mat', CASSI))
-# m.loadData(HSISingleData(f'./data/Test/{DATASETNAME}48/44.mat', lambda x:repeatDim(CASSI(x)[0], 2)))
-m.loadData(HSISingleData(f'./data/Test/{DATASETNAME}48/44.mat', lambda x:normalizeByMax(CASSI(x)[0])))
-m.loadData(HSISingleData(f'./data/Test/{DATASETNAME}48/44.mat', lambda x:normalizeByMax(X0FromLS(*CASSI(x)))))
+# m.loadData(HSISingleData(datafile, (3, 0, 1, 2), CASSI, labelName='patch_image'))
+# m.loadData(HSISingleData(datafile, (3, 0, 1, 2), CASSI))
+# m.loadData(HSISingleData(datafile, (3, 0, 1, 2), lambda x:repeatDim(CASSI(x)[0], 2), labelName='patch_image'))
+# m.loadData(HSISingleData(datafile, (3, 0, 1, 2), lambda x:normalizeByMax(CASSI(x)[0]), labelName='patch_image'))
+m.loadData(HSISingleData(datafile, (3, 0, 1, 2), lambda x:normalizeByMax(X0FromLS(*CASSI(x))), labelName='patch_image'))
 
 
 print("-------------------------------------")
